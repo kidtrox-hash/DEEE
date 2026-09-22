@@ -32,19 +32,48 @@ function useCountdown(targetISO:string){
 }
 
 export default function App(){
-  // gate — personal, PIN 210508
+  // gate — personal, PIN 210508, then Tanaka 0000 / Diane 1111
   const [gateAuth,setGateAuth]=useState(()=> LS.get<boolean>('td_gate_auth', false))
-  const [gateStep,setGateStep]=useState<0|1>(0)
+  const [gateWho,setGateWho]=useState<UserId | null>(()=> LS.get<UserId | null>('td_gate_who', null))
+  const [gateStep,setGateStep]=useState<0|1|2>(0)
   const [gatePin,setGatePin]=useState('')
   const [gateErr,setGateErr]=useState<string|null>(null)
-  function submitGate(){
-    if(gatePin==='210508'){ setGateAuth(true); LS.set('td_gate_auth', true); setGateErr(null)}
-    else { setGateErr('Wrong pin — try again. Hint: our day?'); setGatePin('')}
-  }
-
-  // identity
+  const [gateUserPin,setGateUserPin]=useState('')
+  const [gateUserErr,setGateUserErr]=useState<string|null>(null)
+  const [gateChoice,setGateChoice]=useState<UserId | null>(null)
+  // identity — who is Tanaka or Diane
   const [who,setWho]=useState<UserId>(()=> LS.get<UserId>('td_who','Diane'))
   useEffect(()=> LS.set('td_who', who), [who])
+
+  function submitGate(){
+    if(gatePin==='210508'){ setGateStep(2); setGateErr(null)}
+    else { setGateErr('Wrong pin — try again. Hint: our day?'); setGatePin('')}
+  }
+  function submitWho(){
+    if(!gateChoice) { setGateUserErr('Pick who you are first'); return }
+    const need = gateChoice==='Diane' ? '1111' : '0000'
+    if(gateUserPin===need){
+      setWho(gateChoice); LS.set('td_who', gateChoice)
+      setGateWho(gateChoice); LS.set('td_gate_who', gateChoice)
+      setGateAuth(true); LS.set('td_gate_auth', true)
+      setGateUserErr(null)
+    } else {
+      setGateUserErr(`Wrong pin for ${gateChoice} — try again`)
+      setGateUserPin('')
+    }
+  }
+  // if already authed but who mismatched gateWho, sync
+  useEffect(()=>{ if(gateAuth && gateWho && gateWho!==who) setWho(gateWho) },[gateAuth, gateWho, who])
+  // force new 2-step gate for users who authed with old single-step (no gateWho yet)
+  useEffect(()=>{
+    const hasOldAuth = LS.get<boolean>('td_gate_auth', false)
+    const hasWho = LS.get<UserId | null>('td_gate_who', null)
+    if(hasOldAuth && !hasWho){
+      LS.set('td_gate_auth', false)
+      setGateAuth(false)
+      setGateStep(0)
+    }
+  },[])
 
   // config state
   const [meetingISO,setMeetingISO]=useState(()=>{
@@ -656,7 +685,7 @@ export default function App(){
                 <button className="btn-primary" style={{marginTop:14, width:'100%'}} onClick={()=> setGateStep(1)}>Continue →</button>
                 <div className="small muted" style={{marginTop:10, fontFamily:'Caveat', fontSize:14, textAlign:'center'}}>Made for you and me ❤️ — Tanaka & Diane</div>
               </>
-            ) : (
+            ) : gateStep===1 ? (
               <>
                 <div className="gate-emoji">🔑</div>
                 <h2>Enter pin to access</h2>
@@ -676,6 +705,32 @@ export default function App(){
                 </div>
                 {gateErr && <div className="small" style={{marginTop:8, color:'var(--accent-2)', textAlign:'center'}}>{gateErr}</div>}
                 <button className="btn-ghost btn-small" style={{marginTop:10, width:'100%'}} onClick={()=> setGateStep(0)}>← back</button>
+              </>
+            ) : (
+              <>
+                <div className="gate-emoji">👋</div>
+                <h2>Who are you?</h2>
+                <p className="small muted" style={{marginTop:4}}>Tanaka or Diane — your pin will tell me.</p>
+                <div style={{display:'flex', gap:8, marginTop:14}}>
+                  <button className={`btn-ghost ${gateChoice==='Tanaka'?'active':''}`} style={{flex:1, borderRadius:999, padding:'12px', border: gateChoice==='Tanaka' ? '1px solid var(--cream)' : '1px solid var(--border)', background: gateChoice==='Tanaka' ? 'var(--cream)' : 'transparent', color: gateChoice==='Tanaka' ? '#1a1210' : 'var(--cream)'}} onClick={()=> { setGateChoice('Tanaka'); setGateUserErr(null)}}>Tanaka</button>
+                  <button className={`btn-ghost ${gateChoice==='Diane'?'active':''}`} style={{flex:1, borderRadius:999, padding:'12px', border: gateChoice==='Diane' ? '1px solid var(--cream)' : '1px solid var(--border)', background: gateChoice==='Diane' ? 'var(--cream)' : 'transparent', color: gateChoice==='Diane' ? '#1a1210' : 'var(--cream)'}} onClick={()=> { setGateChoice('Diane'); setGateUserErr(null)}}>Diane</button>
+                </div>
+                <div style={{display:'flex', gap:8, marginTop:12}}>
+                  <input
+                    value={gateUserPin}
+                    onChange={e=> { setGateUserPin(e.target.value.replace(/\D/g,'')); setGateUserErr(null)}}
+                    onKeyDown={e=> e.key==='Enter' && submitWho()}
+                    placeholder={gateChoice ? `PIN for ${gateChoice}` : 'Pick Tanaka or Diane first'}
+                    inputMode="numeric"
+                    disabled={!gateChoice}
+                    maxLength={4}
+                    style={{flex:1, borderRadius:999, border:'1px solid var(--border)', background: gateChoice ? 'rgba(245,239,232,0.06)' : 'rgba(245,239,232,0.03)', color:'var(--cream)', padding:'12px 16px', fontSize:18, letterSpacing:'0.4em', textAlign:'center', outline:'none', opacity: gateChoice ? 1 : 0.5}}
+                  />
+                  <button className="btn-primary" onClick={submitWho}>Enter</button>
+                </div>
+                <div className="small muted" style={{marginTop:6, textAlign:'center'}}>Diane: 1111 • Tanaka: 0000</div>
+                {gateUserErr && <div className="small" style={{marginTop:8, color:'var(--accent-2)', textAlign:'center'}}>{gateUserErr}</div>}
+                <button className="btn-ghost btn-small" style={{marginTop:10, width:'100%'}} onClick={()=> setGateStep(1)}>← back</button>
               </>
             )}
           </div>
