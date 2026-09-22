@@ -345,7 +345,13 @@ export default function App(){
             img.onload=()=>{ if(ctx){ ctx.clearRect(0,0,rect.width,380); ctx.fillStyle='#0d1a14'; ctx.fillRect(0,0,rect.width,380); ctx.drawImage(img,0,0,rect.width,380)}}
             img.src=r.data
           }
-          if(r.updated_by && r.updated_by !== who) showPush(`${r.updated_by} drew on the board 🖤`, 'Check Our Blackboard', 'board-'+Date.now())
+          if(r.updated_by && r.updated_by !== who){
+            if(boardPushDebounceRef.current) window.clearTimeout(boardPushDebounceRef.current)
+            const updater = r.updated_by
+            boardPushDebounceRef.current = window.setTimeout(()=>{
+              showPush(`${updater} left something on the board 🖤`, 'Check Our Blackboard', 'board-'+Date.now())
+            }, 4000)
+          }
         }
       })
       .on('postgres_changes',{event:'UPDATE', schema:'public', table:'app_config'}, (payload:any)=>{
@@ -388,7 +394,7 @@ export default function App(){
       })
       .subscribe((status:any)=>{ if(status==='SUBSCRIBED') setSupaConnected(true) })
     supaChanRef.current = bc
-    return ()=>{ supabase!.removeChannel(dbChan); supabase!.removeChannel(bc); setSupaConnected(false) }
+    return ()=>{ supabase!.removeChannel(dbChan); supabase!.removeChannel(bc); setSupaConnected(false); if(boardPushDebounceRef.current) window.clearTimeout(boardPushDebounceRef.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[todayStr, todayQ])
 
@@ -429,6 +435,7 @@ export default function App(){
   const [history,setHistory]=useState<string[]>([])
   const [redoStack,setRedoStack]=useState<string[]>([])
   const drawingRef=useRef(false)
+  const boardPushDebounceRef=useRef<number | null>(null)
 
   // load/save board
   useEffect(()=>{
