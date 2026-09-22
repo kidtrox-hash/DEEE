@@ -562,6 +562,14 @@ button { font-family: inherit }
 .gate-card p { font-family:'Cormorant Garamond',serif; font-style:italic; color:var(--muted); font-size:15px; margin-top:6px; line-height:1.5 }
 .gate-card p b { font-style:normal; color:var(--cream); font-family:'Playfair Display',serif }
 .gate-emoji { font-size:28px; margin-bottom:8px }
+.push-banner {
+  position: sticky; top: 56px; z-index: 31;
+  margin: 10px auto 0; max-width: 980px;
+  background: rgba(26,18,16,0.96); backdrop-filter: blur(16px); border:1px solid var(--border); border-radius:14px;
+  padding:10px 12px; display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25); animation: fadeIn .3s ease;
+}
+@media (max-width: 760px){ .push-banner{ margin-left:12px; margin-right:12px } }
 
 /* toast */
 .toast {

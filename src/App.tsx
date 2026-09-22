@@ -77,6 +77,7 @@ export default function App(){
 
   // push notifications — faded but alive
   const [pushEnabled,setPushEnabled]=useState(()=> typeof Notification !== 'undefined' ? Notification.permission==='granted' : false)
+  const [pushDismissed,setPushDismissed]=useState(false)
   const [supaConnected,setSupaConnected]=useState<boolean>(false)
   function showPush(title:string, body:string, tag:string){
     if(typeof Notification==='undefined' || Notification.permission!=='granted') return
@@ -99,14 +100,7 @@ export default function App(){
     if(ok){ setToast('Push enabled ❤️ — you’ll get hearts & notes even when away'); setTimeout(()=>setToast(null),2600) }
     else { setToast('Push blocked — enable in browser settings'); setTimeout(()=>setToast(null),2600) }
   }
-  // auto-prompt after gate (once)
-  useEffect(()=>{
-    if(gateAuth && typeof Notification!=='undefined' && Notification.permission==='default'){
-      // gentle prompt after 1.5s
-      const id=window.setTimeout(()=>{ Notification.requestPermission().then(p=> setPushEnabled(p==='granted'))}, 1500)
-      return ()=> window.clearTimeout(id)
-    }
-  },[gateAuth])
+  // push banner is shown via JSX when permission is 'default' — needs user gesture, so no auto-prompt
 
   // config state
   const [meetingISO,setMeetingISO]=useState(()=>{
@@ -776,6 +770,16 @@ export default function App(){
               </>
             )}
           </div>
+        </div>
+      )}
+      {gateAuth && typeof Notification !== 'undefined' && Notification.permission === 'default' && !pushDismissed && !pushEnabled && (
+        <div className="push-banner">
+          <div style={{flex:1, minWidth:180}}>
+            <div style={{fontWeight:700, fontSize:13}}>Enable notifications?</div>
+            <div className="small muted" style={{fontSize:11}}>Get hearts, notes & board draws even when you’re away</div>
+          </div>
+          <button className="btn-primary btn-small" onClick={enablePush}>🔔 Enable</button>
+          <button className="btn-ghost btn-small" onClick={()=> setPushDismissed(true)}>Later</button>
         </div>
       )}
       {/* faded morphing ambient blobs — subtle when idle, alive when playing */}
