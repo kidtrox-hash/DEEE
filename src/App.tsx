@@ -43,6 +43,8 @@ export default function App(){
   const [gateChoice,setGateChoice]=useState<UserId | null>(null)
   // identity — who is Tanaka or Diane
   const [who,setWho]=useState<UserId>(()=> LS.get<UserId>('td_who','Diane'))
+  const whoRef=useRef(who)
+  useEffect(()=>{ whoRef.current=who },[who])
   useEffect(()=> LS.set('td_who', who), [who])
 
   function submitGate(){
@@ -316,7 +318,7 @@ export default function App(){
         const r=payload.new
         const note: Note={ id:r.id, text:r.text, author:r.author as UserId, date: new Date(r.created_at).toISOString().slice(0,10)}
         setNotes(prev=> prev.some(p=>p.id===note.id)? prev : [note, ...prev])
-        if(r.author !== who){
+        if(r.author !== whoRef.current){
           setToast(`${r.author} left a note ❤️`); setTimeout(()=>setToast(null),2800)
           showPush(`New note from ${r.author} 💌`, r.text.slice(0,90), 'note-'+r.id)
         }
@@ -325,7 +327,7 @@ export default function App(){
         const r=payload.new
         const mem: Memory={ id:r.id, caption:r.caption, text:r.text||'', image:r.image, author:r.author as UserId, date:r.date }
         setMemories(prev=> prev.some(p=>p.id===mem.id)? prev : [mem, ...prev])
-        if(r.author !== who) showPush(`New memory from ${r.author} 📸`, r.caption, 'memory-'+r.id)
+        if(r.author !== whoRef.current) showPush(`New memory from ${r.author} 📸`, r.caption, 'memory-'+r.id)
       })
       .on('postgres_changes',{event:'*', schema:'public', table:'daily_answers'}, (payload:any)=>{
         const r=payload.new
@@ -345,7 +347,7 @@ export default function App(){
             img.onload=()=>{ if(ctx){ ctx.clearRect(0,0,rect.width,380); ctx.fillStyle='#0d1a14'; ctx.fillRect(0,0,rect.width,380); ctx.drawImage(img,0,0,rect.width,380)}}
             img.src=r.data
           }
-          if(r.updated_by && r.updated_by !== who){
+          if(r.updated_by && r.updated_by !== whoRef.current){
             if(boardPushDebounceRef.current) window.clearTimeout(boardPushDebounceRef.current)
             const updater = r.updated_by
             boardPushDebounceRef.current = window.setTimeout(()=>{
