@@ -75,6 +75,39 @@ export default function App(){
     }
   },[])
 
+  // push notifications — faded but alive
+  const [pushEnabled,setPushEnabled]=useState(()=> typeof Notification !== 'undefined' ? Notification.permission==='granted' : false)
+  const [supaConnected,setSupaConnected]=useState<boolean>(false)
+  function showPush(title:string, body:string, tag:string){
+    if(typeof Notification==='undefined' || Notification.permission!=='granted') return
+    try{
+      if('serviceWorker' in navigator){
+        navigator.serviceWorker.ready.then(reg=>{
+          if(reg.active) reg.showNotification(title, { body, tag, icon:'/pwa-192x192.png', badge:'/pwa-192x192.png' } as any)
+          else new Notification(title, { body, tag } as any)
+        }).catch(()=> new Notification(title, { body } as any))
+      } else {
+        new Notification(title, { body } as any)
+      }
+    }catch{ try{ new Notification(title, { body } as any)}catch{} }
+  }
+  async function enablePush(){
+    if(typeof Notification==='undefined'){ setToast('Notifications not supported on this browser'); setTimeout(()=>setToast(null),2500); return}
+    const res = await Notification.requestPermission()
+    const ok = res==='granted'
+    setPushEnabled(ok)
+    if(ok){ setToast('Push enabled ❤️ — you’ll get hearts & notes even when away'); setTimeout(()=>setToast(null),2600) }
+    else { setToast('Push blocked — enable in browser settings'); setTimeout(()=>setToast(null),2600) }
+  }
+  // auto-prompt after gate (once)
+  useEffect(()=>{
+    if(gateAuth && typeof Notification!=='undefined' && Notification.permission==='default'){
+      // gentle prompt after 1.5s
+      const id=window.setTimeout(()=>{ Notification.requestPermission().then(p=> setPushEnabled(p==='granted'))}, 1500)
+      return ()=> window.clearTimeout(id)
+    }
+  },[gateAuth])
+
   // config state
   const [meetingISO,setMeetingISO]=useState(()=>{
     const stored = LS.get<string>('td_meeting', DEFAULTS.meetingDate)
@@ -283,22 +316,30 @@ export default function App(){
         }
       }catch(e){ console.warn('Supabase hydrate failed', e)}
     })()
-    // postgres realtime
+    // postgres realtime — with push
     const dbChan = supabase!.channel('td-db')
       .on('postgres_changes',{event:'INSERT', schema:'public', table:'notes'}, (payload:any)=>{
         const r=payload.new
         const note: Note={ id:r.id, text:r.text, author:r.author as UserId, date: new Date(r.created_at).toISOString().slice(0,10)}
         setNotes(prev=> prev.some(p=>p.id===note.id)? prev : [note, ...prev])
+        if(r.author !== who){
+          setToast(`${r.author} left a note ❤️`); setTimeout(()=>setToast(null),2800)
+          showPush(`New note from ${r.author} 💌`, r.text.slice(0,90), 'note-'+r.id)
+        }
       })
       .on('postgres_changes',{event:'INSERT', schema:'public', table:'memories'}, (payload:any)=>{
         const r=payload.new
         const mem: Memory={ id:r.id, caption:r.caption, text:r.text||'', image:r.image, author:r.author as UserId, date:r.date }
         setMemories(prev=> prev.some(p=>p.id===mem.id)? prev : [mem, ...prev])
+        if(r.author !== who) showPush(`New memory from ${r.author} 📸`, r.caption, 'memory-'+r.id)
       })
       .on('postgres_changes',{event:'*', schema:'public', table:'daily_answers'}, (payload:any)=>{
         const r=payload.new
         if(r?.date===todayStr){
           setDaily({ question: r.question || todayQ, tanaka: r.tanaka||undefined, diane: r.diane||undefined, date: r.date })
+          if((r.tanaka && r.diane) && !(daily.tanaka && daily.diane)){
+            showPush(`You both answered ❤️`, r.question.slice(0,80), 'daily-'+r.date)
+          }
         }
       })
       .on('postgres_changes',{event:'UPDATE', schema:'public', table:'blackboard'}, (payload:any)=>{
@@ -310,6 +351,7 @@ export default function App(){
             img.onload=()=>{ if(ctx){ ctx.clearRect(0,0,rect.width,380); ctx.fillStyle='#0d1a14'; ctx.fillRect(0,0,rect.width,380); ctx.drawImage(img,0,0,rect.width,380)}}
             img.src=r.data
           }
+          if(r.updated_by && r.updated_by !== who) showPush(`${r.updated_by} drew on the board 🖤`, 'Check Our Blackboard', 'board-'+Date.now())
         }
       })
       .on('postgres_changes',{event:'UPDATE', schema:'public', table:'app_config'}, (payload:any)=>{
@@ -323,17 +365,17 @@ export default function App(){
         if(r?.video_name) setVideoName(r.video_name)
         if(typeof r?.hide_met==='boolean') setHideMet(r.hide_met)
       })
-      .subscribe()
+      .subscribe((status:any)=>{ if(status==='SUBSCRIBED') setSupaConnected(true); if(status==='CLOSED' || status==='CHANNEL_ERROR') setSupaConnected(false)})
 
     // broadcast for ephemeral events (hearts, thinking, board strokes)
     const bc = supabase!.channel('td-room', { config: { broadcast: { self: false } } })
       .on('broadcast', {event:'heart'}, (payload:any)=>{
         const from = payload.payload?.from as UserId
-        if(from){ triggerHearts(from,false); setToast(`From ${from} ❤️`); setTimeout(()=>setToast(null),2800)}
+        if(from){ triggerHearts(from,false); setToast(`From ${from} ❤️`); setTimeout(()=>setToast(null),2800); showPush(`${from} sent you love ❤️`, 'Someone is thinking of you', 'heart-'+Date.now())}
       })
       .on('broadcast', {event:'thinking'}, (payload:any)=>{
         const from = payload.payload?.from as UserId
-        if(from){ setThinking({from, at:Date.now()}); setToast(`${from} is thinking about you ❤️`); setTimeout(()=>{setThinking(null); setToast(null)},3500)}
+        if(from){ setThinking({from, at:Date.now()}); setToast(`${from} is thinking about you ❤️`); setTimeout(()=>{setThinking(null); setToast(null)},3500); showPush(`${from} is thinking about you ❤️`, 'Tap to open', 'thinking-'+Date.now())}
       })
       .on('broadcast', {event:'board'}, (payload:any)=>{
         const img = payload.payload?.img
@@ -350,9 +392,9 @@ export default function App(){
         const who2=payload.payload?.who; const tool2=payload.payload?.tool
         if(who2){ setBoardStatus(`${who2} is ${tool2==='eraser'?'erasing':'drawing'}...`); setTimeout(()=> setBoardStatus('Our board ❤️'),1600)}
       })
-      .subscribe()
+      .subscribe((status:any)=>{ if(status==='SUBSCRIBED') setSupaConnected(true) })
     supaChanRef.current = bc
-    return ()=>{ supabase!.removeChannel(dbChan); supabase!.removeChannel(bc) }
+    return ()=>{ supabase!.removeChannel(dbChan); supabase!.removeChannel(bc); setSupaConnected(false) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[todayStr, todayQ])
 
@@ -755,9 +797,20 @@ export default function App(){
             <a href="#question" className={active==='question'?'active':''}>Question</a>
             <a href="#workshop" onClick={(e)=>{e.preventDefault(); setShowWorkshop(true)}} style={{color:'var(--accent-2)'}}>Workshop</a>
           </nav>
-          <div className="whoami">
-            <button className={who==='Tanaka'?'active':''} onClick={()=>setWho('Tanaka')}>Tanaka</button>
-            <button className={who==='Diane'?'active':''} onClick={()=>setWho('Diane')}>Diane</button>
+          <div style={{display:'flex', alignItems:'center', gap:8}}>
+            <div style={{display:'flex', alignItems:'center', gap:6}} title={supaConnected ? 'Live — Supabase connected' : 'Connecting… fallback to local'}>
+              <span style={{width:8, height:8, borderRadius:'50%', background: supaConnected ? '#22c55e' : '#f59e0b', boxShadow: supaConnected ? '0 0 8px rgba(34,197,94,0.6)' : 'none', display:'inline-block'}} />
+              <span className="small muted" style={{fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', display:'none'}}>{supaConnected?'Live':''}</span>
+            </div>
+            {!pushEnabled ? (
+              <button className="btn-ghost btn-small" style={{padding:'6px 10px', fontSize:11, whiteSpace:'nowrap'}} onClick={enablePush} title="Enable push notifications for hearts, notes & board">🔔 Enable push</button>
+            ) : (
+              <span className="small" style={{fontSize:11, color:'var(--muted)', whiteSpace:'nowrap'}} title="Push enabled — you’ll get alerts even when away">🔔 Push on</span>
+            )}
+            <div className="whoami">
+              <button className={who==='Tanaka'?'active':''} onClick={()=>setWho('Tanaka')}>Tanaka</button>
+              <button className={who==='Diane'?'active':''} onClick={()=>setWho('Diane')}>Diane</button>
+            </div>
           </div>
         </div>
       </header>
