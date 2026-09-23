@@ -273,6 +273,20 @@ export default function App(){
   useEffect(()=>{ if(daily.question!==todayQ) setDaily({question:todayQ,date:todayStr}) },[todayQ, todayStr, daily.question])
   useEffect(()=> LS.set('td_daily_'+todayStr, daily),[daily, todayStr])
   const [answerDraft,setAnswerDraft]=useState('')
+  function resetDaily(){
+    const cleared: DailyAnswer = { question: todayQ, date: todayStr }
+    setDaily(cleared); setAnswerDraft(''); LS.set('td_daily_'+todayStr, cleared)
+    if(isSupabase && supabase){ supabase!.from('daily_answers').delete().eq('date', todayStr).then(()=>{}) }
+    setToast('Question reset — answer again ❤️'); setTimeout(()=>setToast(null),2200)
+  }
+  function rotateDaily(){
+    const nextIdx = (dailyIdx + 1) % questions.length
+    const nextQ = questions[nextIdx]
+    const cleared: DailyAnswer = { question: nextQ, date: todayStr }
+    setDaily(cleared); setAnswerDraft(''); LS.set('td_daily_'+todayStr, cleared)
+    if(isSupabase && supabase){ supabase!.from('daily_answers').upsert({ date: todayStr, question: nextQ, tanaka:null, diane:null, updated_at: new Date().toISOString()}, {onConflict:'date'} as never).then(()=>{}) }
+    setToast('New question for today ❤️'); setTimeout(()=>setToast(null),2200)
+  }
 
   // hearts / thinking realtime via BroadcastChannel + storage event
   const [hearts,setHearts]=useState<HeartEvent[]>([])
@@ -1154,6 +1168,10 @@ export default function App(){
                 {(daily.tanaka || daily.diane) && <div className="small" style={{marginTop:10, color:'var(--accent-2)'}}>{daily.tanaka?'Tanaka':'Diane'} already answered — shhh, not peeking until you both do 😉</div>}
               </>
             )}
+          </div>
+          <div className="row" style={{justifyContent:'center', gap:8, marginTop:10}}>
+            <button className="btn-ghost btn-small" onClick={resetDaily} title="Clear today's answers (both) so you can answer again">↺ Reset answers</button>
+            <button className="btn-ghost btn-small" onClick={rotateDaily} title="Pick next question for today">↻ Next question</button>
           </div>
           <div className="small muted" style={{marginTop:10, textAlign:'center'}}>Come back tomorrow. — there'll be a new one waiting.</div>
         </section>
