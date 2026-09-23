@@ -76,6 +76,36 @@ export default function App(){
       setGateStep(0)
     }
   },[])
+  // logout shortcut: Ctrl+Shift+E
+  useEffect(()=>{
+    const onKeyDown = (e: KeyboardEvent)=>{
+      const isE = e.code==='KeyE' || e.key.toLowerCase()==='e'
+      if(e.ctrlKey && e.shiftKey && isE){
+        e.preventDefault()
+        e.stopPropagation()
+        // @ts-ignore debug
+        console.log('[logout] Ctrl+Shift+E triggered')
+        LS.set('td_gate_auth', false)
+        try{ localStorage.removeItem('td_gate_who'); localStorage.removeItem('td_gate_auth'); LS.set('td_gate_auth', false)}catch{}
+        setGateAuth(false)
+        setGateWho(null)
+        setGateStep(0)
+        setGatePin('')
+        setGateUserPin('')
+        setGateChoice(null)
+        setGateErr(null)
+        setGateUserErr(null)
+        // setTimeout to ensure state flush, also toast if possible
+        try{ setToast('Logged out — bye ❤️'); setTimeout(()=> setToast(null),1800)}catch{}
+      }
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('keydown', onKeyDown as any, true)
+    return ()=> {
+      window.removeEventListener('keydown', onKeyDown, true)
+      document.removeEventListener('keydown', onKeyDown as any, true)
+    }
+  },[])
 
   // push notifications — faded but alive
   const [pushEnabled,setPushEnabled]=useState(()=> typeof Notification !== 'undefined' ? Notification.permission==='granted' : false)
