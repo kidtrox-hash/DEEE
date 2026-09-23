@@ -1094,11 +1094,19 @@ export default function App(){
         <section id="memories" className="section">
           <div className="section-head"><h2>Our memories <em>📸</em></h2><p>our scrapbook</p></div>
           <p className="section-desc">Not perfect. Just us. Exactly how I want to remember it.</p>
-          <div style={{display:'flex', gap:8, flexWrap:'wrap', marginBottom:12}}>
+          <div style={{display:'flex', gap:8, flexWrap:'wrap', marginBottom:12, alignItems:'center'}}>
             <input placeholder="Caption — e.g. This moment ❤️" value={memDraft.caption} onChange={e=> setMemDraft(s=>({...s, caption:e.target.value}))} style={{flex:'1 1 160px', borderRadius:999, border:'1px solid var(--border)', background:'rgba(245,239,232,0.06)', color:'var(--cream)', padding:'10px 14px', fontSize:13, outline:'none'}} />
-            <input placeholder="Image URL" value={memDraft.image} onChange={e=> setMemDraft(s=>({...s, image:e.target.value}))} style={{flex:'1 1 160px', borderRadius:999, border:'1px solid var(--border)', background:'rgba(245,239,232,0.06)', color:'var(--cream)', padding:'10px 14px', fontSize:13, outline:'none'}} />
             <input placeholder="Little story…" value={memDraft.text} onChange={e=> setMemDraft(s=>({...s, text:e.target.value}))} style={{flex:'1 1 220px', borderRadius:999, border:'1px solid var(--border)', background:'rgba(245,239,232,0.06)', color:'var(--cream)', padding:'10px 14px', fontSize:13, outline:'none'}} />
-            <button className="btn-primary btn-small" onClick={addMemory}>Add to scrapbook</button>
+            <label className="btn-ghost btn-small" style={{cursor:'pointer', border:'1px dashed var(--border)', display:'inline-flex', alignItems:'center', gap:6, borderRadius:999, padding:'10px 14px', whiteSpace:'nowrap'}}>
+              📸 {memDraft.image ? 'Change photo' : 'Upload photo'}
+              <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{
+                const f=(e.target as HTMLInputElement).files?.[0]; if(!f) return;
+                if(f.size > 5*1024*1024){ setToast('Image too big (>5MB) — try a smaller file'); setTimeout(()=>setToast(null),2500); return}
+                const r=new FileReader(); r.onload=()=>{ setMemDraft(s=>({...s, image:r.result as string})); setToast('Photo ready ❤️'); setTimeout(()=>setToast(null),1500)}; r.readAsDataURL(f); (e.target as HTMLInputElement).value=''
+              }} />
+            </label>
+            {memDraft.image && <div style={{display:'flex', alignItems:'center', gap:6}}><img src={memDraft.image} alt="preview" style={{width:36,height:36,borderRadius:8,objectFit:'cover',border:'1px solid var(--border)'}} /><button className="btn-ghost btn-small" style={{padding:'4px 8px', fontSize:11}} onClick={()=> setMemDraft(s=>({...s, image:''}))}>✕</button></div>}
+            <button className="btn-primary btn-small" onClick={addMemory} disabled={!memDraft.caption.trim() || !memDraft.image.trim()} style={{opacity: !memDraft.caption.trim() || !memDraft.image.trim() ? 0.5 : 1}}>Add to scrapbook</button>
           </div>
           <div className="masonry">
             {memories.map(m=>(
